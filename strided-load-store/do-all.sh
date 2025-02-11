@@ -10,9 +10,14 @@ set -u
 # Produce help message
 usage () {
     cat <<EOF
-Usage ./do-all.sh                     : Benchmark whole word load/store.
+Usage ./do-all.sh                     : Benchmark strided load/store.
+                   [--quick]          : Reduce default --nloops and range of
+                                        strides to test (default)
+                   [--full]           : Use larger default --nloops and range
+                                        of strides to test
                    [--nloops <count>] : Number of iterations of the test
-                                        program (default 10000000)
+                                        program (default 10000 (--full) or
+                                        1000 (--quick))
                    [--nstats <count>] : Number of times to repeat each test
                                         for statistical analysis (default 10)
                    [--icount <count>] : Now many duplicate of the instruction
@@ -136,7 +141,7 @@ instr="vlse8  \
 vlenlist="128 256 512 1024"
 
 lmullist="m1 m2 m4 m8"
-strides="x0 -1023 -255 -16 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 15 256 2048"
+strides="x0 -255 -7 0 1 15"
 
 tmpf=$(mktemp strided-load-store-XXXXXX.txt)
 logf=rundata.log
@@ -144,7 +149,8 @@ logf=rundata.log
 resf="res.csv"
 
 # Defaults for variables
-nloops=10000
+doquick=true
+nloops=1000
 nstats=10
 icount=1000
 qemubase="6528013b5f"
@@ -155,6 +161,15 @@ set +u
 until
   opt="$1"
   case "${opt}" in
+      --quick)
+	  doquick=true
+	  ;;
+      --full)
+	  doquick=false
+	  nloops=10000
+	  strides="x0 -1023 -255 -16 -8 -7 -6 -5 -4 -3 -2 -1 \
+                   0 1 2 3 4 5 6 7 8 15 256 2048"
+	  ;;
       --nloops)
 	  shift
 	  nloops="$1"
@@ -197,6 +212,8 @@ rm -f ${logf}
 
 # All the instructions
 echo "Strided instructions"
+echo -n "Start time: "
+date
 printf '"vlen","lmul","stride","op"' > ${resf}
 for n in $(seq ${nstats})
 do
@@ -213,7 +230,7 @@ do
 	    for s in ${strides}
 	    do
 		printf '"%d","%s","%s","%s"' ${vl} ${lmul} ${s} ${i} >> ${resf}
-		printf "VLEN = %4d, LMUL = %2s, STRIDE = %4s: %-7s " \
+		printf "VLEN = %4d, LMUL = %2s, STRIDE = %5s: %-7s " \
 		       ${vl} ${lmul} ${s} ${i}
 		for n in $(seq ${nstats})
 		do
@@ -227,6 +244,9 @@ do
 	done
     done
 done
+
+echo -n "End time: "
+date
 
 # Tidy up
 make clean > /dev/null 2>&1
