@@ -32,7 +32,7 @@ EOF
 # Build the exe
 # $1 Instruction
 # $2 Instruction count
-# $3 Stride
+# $3 Stride, which could be the special case "x0"
 # $4 lmul
 # $5 0 if load, 1 if store
 buildit() {
@@ -44,9 +44,16 @@ buildit() {
     local elem=$(echo "${i}" | sed -e 's/^v.s//')
     # Single instr build
     make clean > /dev/null 2>&1
-    make ICNT=${icount} LOOP_CNT=${nloops} VOP=${i} \
-	 DOMASK=0 DOSTORE=${dostore} STRIDE="${stride}" ELEM="${elem}" \
-	 LMUL=${lmul} ${i}.exe > /dev/null 2>&1
+    if [[ "${stride}" == "x0" ]]
+    then
+	make ICNT=${icount} LOOP_CNT=${nloops} VOP=${i} \
+	     DOMASK=0 DOSTORE=${dostore} STRIDE_REG="${stride}" ELEM="${elem}" \
+	     LMUL=${lmul} ${i}.exe > /dev/null 2>&1
+    else
+	make ICNT=${icount} LOOP_CNT=${nloops} VOP=${i} \
+	     DOMASK=0 DOSTORE=${dostore} STRIDE="${stride}" ELEM="${elem}" \
+	     LMUL=${lmul} ${i}.exe > /dev/null 2>&1
+    fi
 }
 
 # Return the time for doing a single run. Assumes the exe has been built
@@ -129,7 +136,7 @@ instr="vlse8  \
 vlenlist="128 256 512 1024"
 
 lmullist="m1 m2 m4 m8"
-strides="1 2 3 4 5 6 7 8 15 256 2048"
+strides="x0 -1023 -255 -16 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 15 256 2048"
 
 tmpf=$(mktemp strided-load-store-XXXXXX.txt)
 logf=rundata.log
@@ -205,8 +212,8 @@ do
 	do
 	    for s in ${strides}
 	    do
-		printf '"%d","%s","%d","%s"' ${vl} ${lmul} ${s} ${i} >> ${resf}
-		printf "VLEN = %4d, LMUL = %2s, STRIDE = %4d: %-7s " \
+		printf '"%d","%s","%s","%s"' ${vl} ${lmul} ${s} ${i} >> ${resf}
+		printf "VLEN = %4d, LMUL = %2s, STRIDE = %4s: %-7s " \
 		       ${vl} ${lmul} ${s} ${i}
 		for n in $(seq ${nstats})
 		do
